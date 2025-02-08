@@ -1,0 +1,67 @@
+*Pick And Place List
+*Company=
+*Author=
+*eMail=
+*
+*Project=Revolution Dashboard Lilygo PCB
+*Date=16:32:20
+*CreatedBy=Fritzing 0.9.10b.2022-07-01.CD-2134-0-40d23c29
+*
+*
+*Coordinates in mm, always center of component
+*Origin 0/0=Lower left corner of PCB
+*Rotation in degree (0-360, math. pos.)
+*
+*No;Value;Package;X;Y;Rotation;Side;Name
+1;;molex-1x3_lock;6.78575;-4.38489;-90;Bottom;JP7
+2;;;10.7442;-31.0436;0;Bottom;Copper Fill17
+3;;molex-1x2_lock;19.3588;-33.4679;-90;Bottom;JP9
+4;;molex-1x4_lock;14.1518;-5.65489;-90;Bottom;JP5
+5;;;23.3172;-23.4236;0;Bottom;Copper Fill6
+6;;;3.2004;-23.4236;0;Bottom;Copper Fill27
+7;;;10.5156;-20.528;0;Bottom;Copper Fill5
+8;;;6.34052;-35.9149;-90;Bottom;IMG1
+9;;;18.288;-22.8648;0;Bottom;Copper Fill23
+10;;molex-1x2_lock;19.3588;-25.8479;-90;Bottom;JP8
+11;;;23.3172;-18.3436;0;Bottom;Copper Fill9
+12;;;23.3172;-31.0436;0;Bottom;Copper Fill18
+13;;;23.3172;-16.0322;0;Bottom;Copper Fill32
+14;;;21.9202;-7.3454;0;Bottom;Copper Fill12
+15;;;3.2004;-28.5036;0;Bottom;Copper Fill22
+16;;;23.3172;-18.3436;0;Bottom;Copper Fill30
+17;;;23.3172;-15.8036;0;Bottom;Copper Fill10
+18;;molex-1x2_lock;23.2958;-2.09889;0;Bottom;JP4
+19;;;19.177;-33.609;0;Bottom;Copper Fill2
+20;;;4.4958;-35.895;0;Bottom;Copper Fill1
+21;;;3.2004;-10.9268;0;Bottom;Copper Fill35
+22;;;3.2004;-15.8036;0;Bottom;Copper Fill33
+23;;;4.4958;-14.7622;0;Bottom;Copper Fill7
+24;;;23.3172;-25.9636;0;Bottom;Copper Fill24
+25;;;19.5834;-19.2834;0;Bottom;Copper Fill3
+26;;;23.3172;-23.4236;0;Bottom;Copper Fill26
+27;;;23.3172;-25.9636;0;Bottom;Copper Fill4
+28;;;19.604;-17.0234;-90;Bottom;TXT1
+29;;;3.2004;-25.9636;0;Bottom;Copper Fill25
+30;;;15.2654;-18.2928;0;Bottom;Copper Fill20
+31;;;20.8026;-34.2694;0;Bottom;Copper Fill16
+32;;;3.2004;-31.0436;0;Bottom;Copper Fill19
+33;;;23.3172;-28.5036;0;Bottom;Copper Fill21
+34;;;10.8204;-3.1036;0;Bottom;Copper Fill15
+35;;;4.2672;-5.8468;0;Bottom;Copper Fill13
+36;220;0805 [SMD];9.79505;-22.6268;0;Bottom;180
+37;;;3.2004;-20.8836;0;Bottom;Copper Fill29
+38;;;23.3172;-20.8836;0;Bottom;Copper Fill8
+39;;;3.2004;-18.3436;0;Bottom;Copper Fill31
+40;;;23.3172;-13.2636;0;Bottom;Copper Fill11
+41;;;23.3172;-20.8836;0;Bottom;Copper Fill28
+42;220;0805 [SMD];7.89372;-35.2619;0;Bottom;180
+43;;molex-1x3_lock;19.7398;-4.38489;90;Bottom;JP6
+44;;;3.2004;-13.2636;0;Bottom;Copper Fill34
+45;;;9.9568;-9.987;0;Bottom;Copper Fill36
+46;;;13.4837;-15.563;0;Bottom;A1
+47;;;22.1488;-3.2052;0;Bottom;Copper Fill37
+48;;dil06;10.7227;-29.7976;-90;Bottom;U1
+49;;dil06;10.7227;-17.0976;-90;Bottom;U2
+50;;;11.4698;-24.2878;-90;Bottom;TXT1
+51;1k;0805 [SMD];13.0177;-37.4048;0;Bottom;1K
+52;;;16.9672;-4.7292;0;Bottom;Copper Fill14
