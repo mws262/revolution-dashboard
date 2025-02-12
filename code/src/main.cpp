@@ -264,11 +264,10 @@ void drawScreen() {
   if (setMi == 1) {
     speed = speed * 0.621371;
   }
-  if (speed < 0) {
-    speed = 0;
-  } else {
-    mainSprite.drawString(String(speed, 0), 79, 102, 8);
-  }
+  
+  // Draw the current speed, but keep it in the bounds of 0 to 99.
+  mainSprite.drawString(String(constrain(speed, 0, 99), 0), 79, 102, 8);
+
   // push Sprite to disp
   mainSprite.pushSprite(0, 0);
 }
@@ -472,10 +471,10 @@ void loop() {
     throttleRAW = throttleRAW + thComp;
   }
 
-  if (throttleRAW > thZero) {
+  if (throttleRAW >= thZero) {
     nunck =
         map(throttleRAW, thZero, thMax + 100, 127, maxNunck); //+100 to avoid running out of range
-  } else if (throttleRAW < thZero) {
+  } else {
     nunck = map(throttleRAW, thZero, thMin - 100, 127, 0); //-100 to avoid running out of range
   }
 
