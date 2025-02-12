@@ -31,8 +31,10 @@ https://github.com/Bodmer/TFT_eSPI
 #include <ESPmDNS.h>
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
+#include "wifi_credentials.h"
+
 const char* ssid = WIFI_SSID;
-const char* password = WIFI_PASS;
+const char* password = WIFI_PASSWORD;
 bool WIFI = 0;
 
 #include <SimpleKalmanFilter.h> //to smooth throttle value
@@ -44,8 +46,9 @@ Preferences pref;
 #include <HardwareSerial.h>
 HardwareSerial SerialVESC(2);
 VescUart UART;
+CST816S touch(18, 17, 21, 16); // sda, scl, rst, irq
 
-//images & font
+// images & font
 #include "Rev1.h"
 #include "Esc.h"
 #include "Mot.h"
@@ -94,50 +97,53 @@ unsigned long debounceDelay = 300;  //delay in milliseconds to wait for next val
 TFT_eSPI tft = TFT_eSPI(); 
 TFT_eSprite mainSprite= TFT_eSprite(&tft);
 
-void setup() {
- //OTA
- WiFi.mode(WIFI_STA);
- WiFi.begin(ssid, password);
- ArduinoOTA
- .onStart([]() {
-   String type;
-   if (ArduinoOTA.getCommand() == U_FLASH)
-     type = "sketch";
-   else // U_SPIFFS
-     type = "filesystem";
-  });
- ArduinoOTA.begin();
- //data storage
- pref.begin("thValues", true); //"true" defines a read-only access
- thMax = pref.getUInt("thMax", 0);
- thZero = pref.getUInt("thZero", 0);
- thMin = pref.getUInt("thMin", 0);
- pref.end();
- //serial VESC
- SerialVESC.begin(115200, SERIAL_8N1, 43, 44); //Lilygo Pin43=RX to VescTX, Lilygo Pin44=TX to VescRX
- while (!SerialVESC) {;}
- UART.setSerialPort(&SerialVESC);
- UART.getFWversion();
- //setup the input & output pins
- pinMode(headlight, OUTPUT);
- pinMode(brakeSw, INPUT);
- pinMode(throttle, INPUT);
- ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
- ledcAttachPin(rearlight, PWM_CHANNEL);
- //display
- tft.init();
- tft.setRotation(0);
- tft.setSwapBytes(true);
- tft.pushImage(0,0,170,320,Rev1);
- mainSprite.createSprite(170,320);
- mainSprite.setSwapBytes(true); 
- //touch
- pinMode(PIN_POWER_ON, OUTPUT);
- digitalWrite(PIN_POWER_ON, HIGH);
- touch.begin();
+void lockscreen(int x, int y);
 
- delay(2500); // waiting to start the VESC
- lockscreen(-1,-1);
+void setup() {
+  // OTA
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  ArduinoOTA.onStart([]() {
+    String type;
+    if (ArduinoOTA.getCommand() == U_FLASH)
+      type = "sketch";
+    else // U_SPIFFS
+      type = "filesystem";
+  });
+  ArduinoOTA.begin();
+  // data storage
+  pref.begin("thValues", true); //"true" defines a read-only access
+  thMax = pref.getUInt("thMax", 0);
+  thZero = pref.getUInt("thZero", 0);
+  thMin = pref.getUInt("thMin", 0);
+  pref.end();
+  // serial VESC
+  SerialVESC.begin(115200, SERIAL_8N1, 43, 44); // Lilygo Pin43=RX to VescTX, Lilygo Pin44=TX to VescRX
+  while (!SerialVESC) {
+    ;
+  }
+  UART.setSerialPort(&SerialVESC);
+  UART.getFWversion();
+  // setup the input & output pins
+  pinMode(headlight, OUTPUT);
+  pinMode(brakeSw, INPUT);
+  pinMode(throttle, INPUT);
+  ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
+  ledcAttachPin(rearlight, PWM_CHANNEL);
+  // display
+  tft.init();
+  tft.setRotation(0);
+  tft.setSwapBytes(true);
+  tft.pushImage(0, 0, 170, 320, Rev1);
+  mainSprite.createSprite(170, 320);
+  mainSprite.setSwapBytes(true);
+  // touch
+  pinMode(PIN_POWER_ON, OUTPUT);
+  digitalWrite(PIN_POWER_ON, HIGH);
+  touch.begin();
+
+  delay(2500); // waiting to start the VESC
+  lockscreen(-1, -1);
 }
 
 void lockscreen(int x, int y) {
