@@ -83,8 +83,8 @@ int nunck = 127;
 uint32_t filterTime = 0; //for Kalman Filter
 bool filterDelay = 1;
 
-unsigned int maxVal = analogRead(throttle);
-unsigned int minVal = analogRead(throttle);
+unsigned int maxVal = analogRead(PIN_THROTTLE);
+unsigned int minVal = analogRead(PIN_THROTTLE);
 unsigned int thMax;
 unsigned int thZero;
 unsigned int thMin;
@@ -126,11 +126,11 @@ void setup() {
   UART.setSerialPort(&SerialVESC);
   UART.getFWversion();
   // setup the input & output pins
-  pinMode(headlight, OUTPUT);
-  pinMode(brakeSw, INPUT);
-  pinMode(throttle, INPUT);
+  pinMode(PIN_HEADLIGHT, OUTPUT);
+  pinMode(PIN_BRAKE_SW, INPUT);
+  pinMode(PIN_THROTTLE, INPUT);
   ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
-  ledcAttachPin(rearlight, PWM_CHANNEL);
+  ledcAttachPin(PIN_REARLIGHT, PWM_CHANNEL);
   // display
   tft.init();
   tft.setRotation(0);
@@ -280,7 +280,7 @@ void loop() {
   }
 
  // calculate the estimated value with Kalman Filter
- throttleRAW = thFilter.updateEstimate(analogRead(throttle));
+ throttleRAW = thFilter.updateEstimate(analogRead(PIN_THROTTLE));
 
  //calibrate throttle
  while (confMode==1) {
@@ -296,7 +296,7 @@ void loop() {
     mainSprite.drawRoundRect(90,245,70,50,2,TFT_GREEN);
     mainSprite.drawString("OK",125,272,4);
 
-    unsigned int throttleRAW = thFilter.updateEstimate(analogRead(throttle));
+    unsigned int throttleRAW = thFilter.updateEstimate(analogRead(PIN_THROTTLE));
 
     if(throttleRAW > maxVal) {
       maxVal = throttleRAW;
@@ -375,14 +375,14 @@ void loop() {
   }
 
   if (lightF == HIGH) {
-    digitalWrite(headlight, HIGH);
+    digitalWrite(PIN_HEADLIGHT, HIGH);
   }
   else {
-    digitalWrite(headlight, LOW);
+    digitalWrite(PIN_HEADLIGHT, LOW);
   }
 
  //handling brakelight
-  if (digitalRead(brakeSw) == HIGH || throttleRAW < thZero-250) {  //reduce -250 for brakelight deadband
+  if (digitalRead(PIN_BRAKE_SW) == HIGH || throttleRAW < thZero-250) {  //reduce -250 for brakelight deadband
     ledcWrite(PWM_CHANNEL, brakeLight_DUTY_CYCLE);
   }
   else {
@@ -422,7 +422,7 @@ void loop() {
    nunck = map(throttleRAW, thZero, thMin-100, 127,0); //-100 to avoid running out of range
   }
 
- if (digitalRead(brakeSw) == 1 && nunck > 127 && stopOnBrake == 1) {
+ if (digitalRead(PIN_BRAKE_SW) == 1 && nunck > 127 && stopOnBrake == 1) {
    nunck = 127; // interrupts acceleration when braking
   }
 
