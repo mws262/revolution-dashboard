@@ -122,6 +122,7 @@ void setup() {
   while (!SerialVESC) {
     ;
   }
+  
   UART.setSerialPort(&SerialVESC);
   UART.getFWversion();
   // setup the input & output pins

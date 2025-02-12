@@ -18,51 +18,46 @@ along with this program.If not, see <http://www.gnu.org/licenses/>.
 
 #include "LiPoCheck.h"
 
-#define MINVOLRANGE     3.0
-#define MAXVOLRANGE     4.2
-#define MAXNUMBERCELLS   12
+#define MINVOLRANGE 3.0
+#define MAXVOLRANGE 4.2
+#define MAXNUMBERCELLS 12
 
 int CountCells(float voltage) {
-	
-	for (int i = 1; i <= MAXNUMBERCELLS; i++)
-	{
-		if ((voltage > ((float)i*MINVOLRANGE)) && (voltage < ((float)i*MAXVOLRANGE)))
-		{
-			return i;
-		}
-	}
-	return 0;
+
+  for (int i = 1; i <= MAXNUMBERCELLS; i++) {
+    if ((voltage > ((float)i * MINVOLRANGE)) && (voltage < ((float)i * MAXVOLRANGE))) {
+      return i;
+    }
+  }
+  return 0;
 }
 
 int CapCheckPerc(float voltage, int cells) {
-	float voltageCell = 0;
-	int ind = 0;
+  float voltageCell = 0;
+  int ind = 0;
 
-	if (cells > 0)
-	{
-		voltageCell = (voltage / cells);
-	}
+  if (cells > 0) {
+    voltageCell = (voltage / cells);
+  }
 
-	if (voltageCell >=4.20)
-	{
-		return (100);
-	}
+  if (voltageCell >= 4.20) {
+    return 100;
+  } else if (voltageCell <= liionDC[0][0]) {
+    return 0;
+  }
 
-	while (!(voltageCell<=liionDC[0][ind+1] && voltageCell > liionDC[0][ind])&& ind<=10)
-	{
-		ind++;
-	}
-	
+  while (!(voltageCell <= liionDC[0][ind + 1] && voltageCell > liionDC[0][ind]) && ind <= 10) {
+    ind++;
+  }
 
-	if (voltageCell <= liionDC[0][ind + 1] && voltageCell > liionDC[0][ind])
-	{
-		float CapacPers = (((liionDC[1][ind + 1] - liionDC[1][ind])/ (liionDC[0][ind + 1] - liionDC[0][ind]))*(voltageCell - liionDC[0][ind])) + liionDC[1][ind];
+  if (voltageCell <= liionDC[0][ind + 1] && voltageCell > liionDC[0][ind]) {
+    float CapacPers =
+        (((liionDC[1][ind + 1] - liionDC[1][ind]) / (liionDC[0][ind + 1] - liionDC[0][ind])) *
+         (voltageCell - liionDC[0][ind])) +
+        liionDC[1][ind];
 
-		return (CapacPers * 100);
-	}
-	else
-	{
-		return 0;
-		
-	}
+    return (CapacPers * 100);
+  } else {
+    return 0;
+  }
 }

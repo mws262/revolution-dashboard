@@ -3,9 +3,6 @@
 //****************************************************************************
 //user setup
 
-#define WIFI_SSID ""  // don't forget to provide your login data inside the quote signs to use over the air programming
-#define WIFI_PASS ""  // programming is only possible at unlocked device, successful connection is displayed under the battery bar
-
 const int mode1 = 1234;   //enter your own code to unlock mode 1, use this for regular driving mode
 const int mode2 = 2345;   //enter your own code to unlock mode 2, use this for sport mode
 const int throttleCal = 1000; // code to run throttle calibration
