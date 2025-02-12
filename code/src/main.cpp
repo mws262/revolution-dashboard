@@ -45,7 +45,6 @@ https://github.com/Bodmer/TFT_eSPI
 
 const char *ssid = WIFI_SSID;
 const char *password = WIFI_PASSWORD;
-bool WIFI = 0;
 
 SimpleKalmanFilter thFilter(2, 2, 0.01);
 Preferences pref;
@@ -59,6 +58,8 @@ const uint32_t PWM_FREQ = 500;
 const uint8_t PWM_RESOLUTION = 8;
 const int BACKLIGHT_DUTY_CYCLE = dimmBL;
 const int BRAKELIGHT_DUTY_CYCLE = 255; // 255 for max brightness = brakelight
+
+const uint16_t WIFI_RECONNECTION_INTERVAL = 5000;
 
 float erpm = 0;
 float rpm = 0;
@@ -92,24 +93,19 @@ unsigned int throttleRAW;
 unsigned long lastTouchTime = 0;   // to manage debounce
 unsigned long debounceDelay = 300; // delay in milliseconds to wait for next valid touch input
 
+bool wifiEverConnected = false;
+unsigned long lastReconnectAttempt = 0;
+
 TFT_eSPI tft = TFT_eSPI();
 TFT_eSprite mainSprite = TFT_eSprite(&tft);
 
 void lockscreen(int x, int y);
 
 void setup() {
-  // OTA
+  // Initiate wifi for OTA updates. This is non-blocking. The main loop will handle
+  // other initializations once the network is connected.
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
-  
-  // Start mDNS with a hostname -- makes it easier to find the ESP32 on your network
-  // Try to ping it if the OTA upload isn't working.
-  while (!MDNS.begin("rev")) {
-    Serial.println("Error starting mDNS");
-    delay(2000);
-  }
-  ArduinoOTA.setHostname("rev");
-  ArduinoOTA.begin();
 
   // data storage
   pref.begin("thValues", false); // "true" defines read-only access
@@ -202,11 +198,14 @@ void drawScreen() {
   // Sprite
   mainSprite.fillSprite(TFT_BLACK);
   mainSprite.unloadFont(); // to draw all other txt before DSEG7 font
+
   // WIFI connection
   mainSprite.setTextColor(TFT_BLUE, TFT_BLACK);
   mainSprite.setTextDatum(4);
-  if (WIFI == 1)
+  if (WiFi.status() == WL_CONNECTED) {
     mainSprite.drawString("WIFI connected", 110, 37, 2);
+  }
+
   // batt bar
   mainSprite.setTextColor(TFT_WHITE, TFT_BLACK);
   if (battPerc > 15) {
@@ -274,14 +273,45 @@ void drawScreen() {
   mainSprite.pushSprite(0, 0);
 }
 
-void loop() {
-  // OTA
-  if (WiFi.waitForConnectResult() == WL_CONNECTED) {
-    WIFI = 1;
+
+// Handle WiFi connection and OTA updates.
+void handleWifi() {
+  // If WiFi is connected, check for OTA updates or, if this is the first
+  // loop since we've connected to WiFi, start mDNS and OTA.
+  if (WiFi.status() == WL_CONNECTED) {
+    if (wifiEverConnected) {
+      ArduinoOTA.handle();
+
+    } else { // First time we've connected to WiFi.
+      wifiEverConnected = true;
+
+      Serial.println("WiFi connected");
+      // Start mDNS with a hostname -- makes it easier to find the ESP32 on your network
+      // Try to ping it if the OTA upload isn't working.
+      if (!MDNS.begin("rev")) { // This will show up on the network as rev.local or possibly rev._arduino._tcp.local
+        Serial.println("Error starting mDNS");
+      }
+
+      ArduinoOTA.setHostname("rev");
+      ArduinoOTA.begin();
+    }
   } else {
-    WIFI = 0;
+    // Attempt a quick reconnect if we've ever connected to WiFi before. Only check periodically.
+    if (wifiEverConnected) {
+      if (millis() - lastReconnectAttempt > WIFI_RECONNECTION_INTERVAL) {
+        Serial.println("WiFi disconnected, attempting to reconnect...");
+        WiFi.reconnect();
+        lastReconnectAttempt = millis();
+      }
+    }
+    // TODO: periodically look for the wifi even if we've never successfully connected to it before.
+    // For example, we turn the scooter on and then ride home.
   }
-  ArduinoOTA.handle();
+}
+
+void loop() {
+
+  handleWifi();
 
   // Lockscreen
   while (lock == 1 && confMode == 0) {
