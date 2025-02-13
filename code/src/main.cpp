@@ -23,7 +23,7 @@
 #include <Arduino.h>
 #include <CST816S.h> //TouchLib
 
-#include "wifi_credentials.h"
+#include "private_credentials.h"
 #include <ArduinoOTA.h>
 #include <ESPmDNS.h>
 #include <HardwareSerial.h>
@@ -493,10 +493,10 @@ void loop() {
 
         if (pin_entry.length() > 3) {
           int enteredPin = pin_entry.toInt();
-          if (enteredPin == mode1) {
+          if (enteredPin == PIN_MODE_NORMAL) {
             log_i("Unlocked to normal mode.");
             changeMode(RevMode::RIDE_NORMAL);
-          } else if (enteredPin == mode2) {
+          } else if (enteredPin == PIN_MODE_SPORT) {
             log_i("Unlocked to sport mode.");
             changeMode(RevMode::RIDE_SPORT);
           } else if (enteredPin == throttleCal) {

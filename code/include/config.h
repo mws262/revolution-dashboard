@@ -2,9 +2,6 @@
 #define _CONFIG_H_
 //****************************************************************************
 //user setup
-
-const uint16_t mode1 = 1234;   //enter your own code to unlock mode 1, use this for regular driving mode
-const uint16_t mode2 = 2345;   //enter your own code to unlock mode 2, use this for sport mode
 const uint16_t throttleCal = 1000; // code to run throttle calibration
 float thPercentage = 80;  //limits max % of throttle for mode1, enter max. RPM in VESC Tool (Motor Settings - General - RPM)
 
