@@ -27,7 +27,7 @@ void DebugWebServer::begin() {
 <html>
   <head>
     <meta charset="utf-8">
-    <title>ESP32 Debug Logs</title>
+    <title>Rev Debug Log</title>
     <style>
       body { background: #000; color: #0f0; font-family: monospace; }
       #log { width: 100%; height: 90vh; overflow-y: auto; padding: 10px; }
