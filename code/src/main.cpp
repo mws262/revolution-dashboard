@@ -1,25 +1,26 @@
-/*
-Project: Revolution Dashboard 1.0
-Author: Roland Stollnberger (stollnberger@gmx.at)
-Created: 12.05.2024
-Description: Control VESC based ESC, set Profiles, Display Data, Lockscreen, Over The Air
-programming...
+// /*
+// Project: Revolution Dashboard 1.0
+// Author: Roland Stollnberger (stollnberger@gmx.at)
+// Created: 12.05.2024
+// Description: Control VESC based ESC, set Profiles, Display Data, Lockscreen, Over The Air
+// programming...
 
-Included Libraries:
-https://github.com/stolliroli/VescUart
-LipoCheck: https://github.com/Peemouse/SmartRing // modified
+// Included Libraries:
+// https://github.com/stolliroli/VescUart
+// LipoCheck: https://github.com/Peemouse/SmartRing // modified
 
-Install Boards:
-Lilygo T-Display S3 Touch: https://github.com/Xinyuan-LilyGO/T-Display-S3 // follow the README to
-install https://github.com/espressif/arduino-esp32
+// Install Boards:
+// Lilygo T-Display S3 Touch: https://github.com/Xinyuan-LilyGO/T-Display-S3 // follow the README to
+// install https://github.com/espressif/arduino-esp32
 
-Libraries to install (via Arduino IDE):
-https://github.com/fbiego/CST816S
-https://github.com/denyssene/SimpleKalmanFilter
-https://github.com/Bodmer/TFT_eSPI
-*/
-
-#include "Arduino.h"
+// Libraries to install (via Arduino IDE):
+// https://github.com/fbiego/CST816S
+// https://github.com/denyssene/SimpleKalmanFilter
+// https://github.com/Bodmer/TFT_eSPI
+// */
+#define log_printf custom_log_printf // This lets me override the Arduino logging print function
+                                     // so I can also send all messages to the webserver.
+#include <Arduino.h>
 #include "LiPoCheck.h"
 #include "TFT_eSPI.h"
 #include "VescUart.h"
@@ -42,6 +43,7 @@ https://github.com/Bodmer/TFT_eSPI
 #include "Light.h"
 #include "Mot.h"
 #include "Rev1.h"
+#include "debug_webserver.hpp"
 
 const char *ssid = WIFI_SSID;
 const char *password = WIFI_PASSWORD;
@@ -51,6 +53,7 @@ Preferences pref;
 HardwareSerial SerialVESC(2);
 VescUart UART;
 CST816S touch(18, 17, 21, 16); // sda, scl, rst, irq
+DebugWebServer debugServer;
 
 // setup PWM for rearlight
 const uint8_t PWM_CHANNEL = 1;
@@ -101,13 +104,35 @@ TFT_eSprite mainSprite = TFT_eSprite(&tft);
 
 void lockscreen(int x, int y);
 
+int custom_log_printf(const char *format, ...) {
+  char log_buf[256];
+
+  // Process variadic arguments
+  va_list args;
+  va_start(args, format);
+  int len = vsnprintf(log_buf, sizeof(log_buf), format, args);
+  va_end(args);
+
+  // Print to Serial
+  Serial.print(log_buf);
+
+  // Send to WebSocket
+  debugServer.broadcast(String(log_buf));
+
+  return len;
+}
+
 void setup() {
+  Serial.begin(115200);
+
   // Initiate wifi for OTA updates. This is non-blocking. The main loop will handle
   // other initializations once the network is connected.
+  log_d("Connecting to WiFi...");
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
 
   // data storage
+  log_d("Loading preferences...");
   pref.begin("thValues", false); // "true" defines read-only access
   thMax = pref.getUInt("thMax", 0);
   thZero = pref.getUInt("thZero", 0);
@@ -115,11 +140,10 @@ void setup() {
   pref.end();
 
   // serial VESC
+  log_d("Setting up serial VESC...");
   SerialVESC.begin(115200, SERIAL_8N1, 43,
                    44); // Lilygo Pin43=RX to VescTX, Lilygo Pin44=TX to VescRX
-  while (!SerialVESC) {
-    ;
-  }
+  while (!SerialVESC) {}
 
   UART.setSerialPort(&SerialVESC);
   UART.getFWversion();
@@ -129,7 +153,9 @@ void setup() {
   pinMode(PIN_THROTTLE, INPUT);
   ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
   ledcAttachPin(PIN_REARLIGHT, PWM_CHANNEL);
+
   // display
+  log_d("Setting up display...");
   tft.init();
   tft.setRotation(0);
   tft.setSwapBytes(true);
@@ -173,16 +199,22 @@ void lockscreen(int x, int y) {
     }
   }
 
-  if (chars[sy][sx] == 'x') // clear entry
+  if (chars[sy][sx] == 'x') {
+    // clear entry
     entry = "";
-  else
+    log_d("Cleared PIN");
+  } else {
     entry = entry + String(chars[sy][sx]);
+    log_i("Keypad entry: %s", entry.c_str());
+  }
 
   if (entry.toInt() == mode1) {
+    log_i("Unlocked to normal mode.");
     lock = 0;
   }
 
   if (entry.toInt() == mode2) {
+    log_i("Unlocked to sport mode.");
     modeS = 1;
     lock = 0;
   }
@@ -280,25 +312,26 @@ void handleWifi() {
   if (WiFi.status() == WL_CONNECTED) {
     if (wifiEverConnected) {
       ArduinoOTA.handle();
-
     } else { // First time we've connected to WiFi.
       wifiEverConnected = true;
 
-      Serial.println("WiFi connected");
+      log_i("Connected to WiFi");
       // Start mDNS with a hostname -- makes it easier to find the ESP32 on your network
       // Try to ping it if the OTA upload isn't working.
       if (!MDNS.begin("rev")) { // This will show up on the network as rev.local or possibly rev._arduino._tcp.local
-        Serial.println("Error starting mDNS");
+        log_e("Error setting up mDNS. Use IP address instead: %s", WiFi.localIP().toString().c_str());
       }
 
       ArduinoOTA.setHostname("rev");
       ArduinoOTA.begin();
+
+      debugServer.begin();
     }
   } else {
     // Attempt a quick reconnect if we've ever connected to WiFi before. Only check periodically.
     if (wifiEverConnected) {
       if (millis() - lastReconnectAttempt > WIFI_RECONNECTION_INTERVAL) {
-        Serial.println("WiFi disconnected, attempting to reconnect...");
+        log_w("WiFi disconnected. Attempting to reconnect...");
         WiFi.reconnect();
         lastReconnectAttempt = millis();
       }
@@ -322,6 +355,8 @@ void loop() {
           lockscreen(touch.data.x, touch.data.y);
       }
     }
+    handleWifi(); // TEMPORARY- todo change the looping structure
+    delay(50);
   }
 
   // calculate the estimated value with Kalman Filter
