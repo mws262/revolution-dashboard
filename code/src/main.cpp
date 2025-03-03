@@ -45,22 +45,18 @@ const char *password = WIFI_PASSWORD;
 enum class RevMode { LOCK, CALIBRATE, RIDE_NORMAL, RIDE_SPORT };
 
 RevMode currentMode = RevMode::LOCK;
-long lastModeChangeTimeMs = 0;
-long lastLoopTime = 0;
 
 SimpleKalmanFilter thFilter(2, 2, 0.01);
 Preferences pref;
 HardwareSerial SerialVESC(2);
 VescUart UART;
-CST816S touch(18, 17, 21, 16); // sda, scl, rst, irq
+CST816S touch(PIN_TOUCH_SDA, PIN_TOUCH_SCL, PIN_TOUCH_RST, PIN_TOUCH_IRQ);
 DebugWebServer debugServer;
 
 // setup PWM for rearlight
 const uint8_t PWM_CHANNEL = 1;
 const uint32_t PWM_FREQ = 500;
 const uint8_t PWM_RESOLUTION = 8;
-const int BACKLIGHT_DUTY_CYCLE = dimmBL;
-const int BRAKELIGHT_DUTY_CYCLE = 255; // 255 for max brightness = brakelight
 
 constexpr long TARGET_LOOP_RATE = 6; // Hz
 constexpr long TARGET_LOOP_PERIOD = 1000 / TARGET_LOOP_RATE;
@@ -68,8 +64,8 @@ const uint16_t WIFI_RECONNECTION_INTERVAL = 5000;
 
 float erpm = 0;
 float rpm = 0;
-float speed = 0;
-int batt = 0;
+float speed_kmh = 0;
+int batt_voltage = 0;
 int battPerc;
 float trip;
 int escT = 0;
@@ -81,21 +77,20 @@ bool lightF = false;
 String pin_entry = "";
 
 int nunck = 127;
-uint32_t antiStutterDelayMs = 1000; // for Kalman Filter
 
-unsigned int maxVal = analogRead(PIN_THROTTLE);
-unsigned int minVal = analogRead(PIN_THROTTLE);
-unsigned int thMax;
-unsigned int thZero;
-unsigned int thMin;
-unsigned int throttleRAW;
+uint16_t maxVal = analogRead(PIN_THROTTLE);
+uint16_t minVal = analogRead(PIN_THROTTLE);
+uint16_t thMax;
+uint16_t thZero;
+uint16_t thMin;
+uint16_t throttleRAW;
 
-// debounce for touch
-unsigned long lastTouchTime = 0;   // to manage debounce
-unsigned long debounceDelay = 300; // delay in milliseconds to wait for next valid touch input
+uint32_t lastTouchTime = 0;   // to manage debounce
+uint32_t lastModeChangeTimeMs = 0;
+uint32_t lastLoopTime = 0;
+uint32_t lastReconnectAttempt = 0;
 
 bool wifiEverConnected = false;
-unsigned long lastReconnectAttempt = 0;
 
 TFT_eSPI tft = TFT_eSPI();
 TFT_eSprite cockpitSprite = TFT_eSprite(&tft);
@@ -142,8 +137,7 @@ void setup() {
   log_d("Setting up serial VESC...");
   SerialVESC.begin(115200, SERIAL_8N1, 43,
                    44); // Lilygo Pin43=RX to VescTX, Lilygo Pin44=TX to VescRX
-  while (!SerialVESC) {
-  }
+  while (!SerialVESC) {}
 
   UART.setSerialPort(&SerialVESC);
   UART.getFWversion();
@@ -159,10 +153,10 @@ void setup() {
   tft.init();
   tft.setRotation(0);
   tft.setSwapBytes(true);
-  tft.pushImage(0, 0, 170, 320, Rev1);
-  cockpitSprite.createSprite(170, 320);
+  tft.pushImage(0, 0, TFT_WIDTH, TFT_HEIGHT, Rev1);
+  cockpitSprite.createSprite(TFT_WIDTH, TFT_HEIGHT);
   cockpitSprite.setSwapBytes(true);
-  lockSprite.createSprite(170, 320);
+  lockSprite.createSprite(TFT_WIDTH, TFT_HEIGHT);
   lockSprite.setSwapBytes(true);
 
   // touch
@@ -170,6 +164,7 @@ void setup() {
   digitalWrite(PIN_POWER_ON, HIGH);
   touch.begin();
 
+  // TODO: verify connection without delay.
   delay(1000); // waiting to start the VESC
   changeMode(RevMode::LOCK);
 }
@@ -177,7 +172,7 @@ void setup() {
 // Draws the entire lock screen including the keypad and current PIN display.
 // Highlights the key corresponding to the most recent digit in 'pin' (if any).
 void drawScreenLock(const String &pin) {
-  lockSprite.fillSprite(TFT_BLACK);
+  lockSprite.fillSprite(BACKGROUND_COLOR);
   lockSprite.setTextColor(TFT_WHITE, TFT_BLACK);
   lockSprite.setTextDatum(4);
 
@@ -208,7 +203,7 @@ void drawScreenLock(const String &pin) {
 
 void drawScreenCockpit() {
   // Sprite
-  cockpitSprite.fillSprite(TFT_BLACK);
+  cockpitSprite.fillSprite(BACKGROUND_COLOR);
   cockpitSprite.unloadFont(); // to draw all other txt before DSEG7 font
 
   // WIFI connection
@@ -227,24 +222,24 @@ void drawScreenCockpit() {
   }
   cockpitSprite.drawRoundRect(60, 10, 100, 15, 2, TFT_WHITE);
   // batt txt
-  cockpitSprite.drawString(String(batt) + " V", 30, 8, 2);
+  cockpitSprite.drawString(String(batt_voltage) + " V", 30, 8, 2);
   cockpitSprite.drawString(String(battPerc) + " %", 30, 26, 2);
   // trip txt
   cockpitSprite.setTextDatum(0);
   cockpitSprite.drawString(String("Trip"), 10, 182, 2);
   cockpitSprite.setTextDatum(2);
-  if (setMi == 1) {
-    cockpitSprite.drawString(String(trip * 0.621371, 2) + " mi", 160, 175, 4);
+  if (useMiles) {
+    cockpitSprite.drawString(String(trip * MI_PER_KM, 2) + " mi", 160, 175, 4);
   } else {
     cockpitSprite.drawString(String(trip, 2) + " km", 160, 175, 4);
   }
   // show throttle reading
-  if (showThReading == 1) {
+  if (showThReading) {
     cockpitSprite.setTextDatum(0);
     cockpitSprite.drawString(String(throttleRAW), 10, 162, 2);
   }
   // line
-  cockpitSprite.drawLine(0, 210, 170, 210, TFT_DARKGREY);
+  cockpitSprite.drawLine(0, 210, TFT_WIDTH, 210, TFT_DARKGREY);
   // ESCTemp txt
   cockpitSprite.setTextDatum(2);
   cockpitSprite.drawString(String(escT), 40, 290, 4);
@@ -265,7 +260,7 @@ void drawScreenCockpit() {
   cockpitSprite.drawString(String("S"), 86, 299, 2);
   // light
   cockpitSprite.pushImage(65, 230, 40, 40, Light);
-  if (lightF == 1) {
+  if (lightF) {
     cockpitSprite.drawRoundRect(62, 229, 46, 41, 3, TFT_BLUE);
   } else {
     cockpitSprite.drawRoundRect(62, 229, 46, 41, 3, TFT_DARKGREY);
@@ -273,12 +268,11 @@ void drawScreenCockpit() {
   // speed
   cockpitSprite.setTextDatum(4);
   cockpitSprite.loadFont(DSEG7);
-  if (setMi == 1) {
-    speed = speed * 0.621371;
-  }
 
-  // Draw the current speed, but keep it in the bounds of 0 to 99.
-  cockpitSprite.drawString(String(constrain(speed, 0, 99), 0), 79, 102, 8);
+  // Prevent trying to display 3-digit speeds or negative signs.
+  float displaySpeed = constrain(useMiles ? speed_kmh * MI_PER_KM : speed_kmh, 0, 99);
+
+  cockpitSprite.drawString(String(displaySpeed, 0), 79, 102, 8);
 
   // push Sprite to disp
   cockpitSprite.pushSprite(0, 0);
@@ -286,9 +280,9 @@ void drawScreenCockpit() {
 
 // Returns the key pressed based on the touch coordinates.
 // Returns '\0' if no valid key was touched.
-char handleLockScreenTouch(int x, int y) {
-  int xpos[3] = {3, 58, 113};
-  int ypos[4] = {73, 128, 183, 238};
+char handleLockScreenTouch(uint16_t x, uint16_t y) {
+  uint16_t xpos[3] = {3, 58, 113};
+  uint16_t ypos[4] = {73, 128, 183, 238};
   char keys[4][3] = {{'1', '2', '3'}, {'4', '5', '6'}, {'7', '8', '9'}, {' ', '0', 'x'}};
 
   int sx = -1, sy = -1;
@@ -385,33 +379,33 @@ void loop() {
   handleWifi();
 
   // Updated filtered throttle reading. TODO: maybe move this into only the drive modes.
-  throttleRAW = thFilter.updateEstimate(analogRead(PIN_THROTTLE));
+  throttleRAW = (uint16_t)thFilter.updateEstimate(analogRead(PIN_THROTTLE));
 
   // Read VESC data regardless of the mode. If we transition into a ride mode,
   // we'd like to already have values.
   if (UART.getVescValues()) {
     erpm = UART.data.rpm;
-    batt = UART.data.inpVoltage;
+    batt_voltage = UART.data.inpVoltage;
     escT = UART.data.tempFET;
     motT = UART.data.tempMotor;
-    trip = UART.data.tachometer;
+    trip = UART.data.tachometer; 
   }
-  rpm = erpm / motPol;
-  speed = erpm / motPol * wheelDia * 3.1415 * 0.00006;
-  trip = trip / wheelDia / 1000 * tachComp;
-  battPerc = CapCheckPerc(batt, numbCell);
+  rpm = erpm / MOT_POLE_PAIRS;
+  speed_kmh = rpm * WHEEL_DIA_MM * M_PI * MIN_PER_HOUR * KM_PER_MM;
+  trip = trip / WHEEL_DIA_MM / 1000.0f * tachComp;
+  battPerc = CapCheckPerc(batt_voltage, BATT_SERIES_CELLS);
 
   // Brakelight will occur in all modes.
   if (digitalRead(PIN_BRAKE_SW) ||
       throttleRAW < thZero - 250) { // reduce -250 for brakelight deadband
-    ledcWrite(PWM_CHANNEL, BRAKELIGHT_DUTY_CYCLE);
+    ledcWrite(PWM_CHANNEL, BACK_BRAKING_LIGHT_DUTY_CYCLE);
   } else {
-    ledcWrite(PWM_CHANNEL, BACKLIGHT_DUTY_CYCLE);
+    ledcWrite(PWM_CHANNEL, BACK_RUNNING_LIGHT_DUTY_CYCLE);
   }
 
   switch (currentMode) {
   case RevMode::CALIBRATE: {
-    cockpitSprite.fillSprite(TFT_BLACK);
+    cockpitSprite.fillSprite(BACKGROUND_COLOR);
     cockpitSprite.setTextColor(TFT_WHITE, TFT_BLACK);
     cockpitSprite.setTextDatum(4);
     cockpitSprite.drawString("move throttle", 85, 20, 2);
@@ -447,8 +441,10 @@ void loop() {
 
     if (touch.available()) {
       unsigned long currentTouchTime = millis();
-      if (currentTouchTime - lastTouchTime > debounceDelay) {
+      if (currentTouchTime - lastTouchTime > TOUCH_DEBOUNCE_TIME_MS) {
         lastTouchTime = currentTouchTime;
+
+        
         if (touch.data.y > 245 && touch.data.y < 295 && touch.data.x > 85) {
           pref.begin("thValues", false);
           pref.putUInt(
@@ -458,11 +454,11 @@ void loop() {
                        throttleRAW);     // should be about 2880, depends on input Voltage ~ 5V
           pref.putUInt("thMin", minVal); // should be about 2100, depends on input Voltage ~ 5V
           pref.end();
-          cockpitSprite.fillSprite(TFT_BLACK);
+          cockpitSprite.fillSprite(BACKGROUND_COLOR);
           cockpitSprite.pushSprite(0, 0);
           changeMode(RevMode::LOCK);
         } else if (touch.data.y > 245 && touch.data.y < 295 && touch.data.x < 85) {
-          cockpitSprite.fillSprite(TFT_BLACK);
+          cockpitSprite.fillSprite(BACKGROUND_COLOR);
           cockpitSprite.pushSprite(0, 0);
           changeMode(RevMode::LOCK);
         }
@@ -472,8 +468,8 @@ void loop() {
   }
   case RevMode::LOCK: {
     if (touch.available()) {
-      unsigned long currentTouchTime = millis();
-      if (currentTouchTime - lastTouchTime > debounceDelay) {
+      uint32_t currentTouchTime = millis();
+      if (currentTouchTime - lastTouchTime > TOUCH_DEBOUNCE_TIME_MS) {
         lastTouchTime = currentTouchTime;
         // Figure out of the touch was on one of the keys.
         char key = handleLockScreenTouch(touch.data.x, touch.data.y);
@@ -499,7 +495,7 @@ void loop() {
           } else if (enteredPin == PIN_MODE_SPORT) {
             log_i("Unlocked to sport mode.");
             changeMode(RevMode::RIDE_SPORT);
-          } else if (enteredPin == throttleCal) {
+          } else if (enteredPin == PIN_MODE_THROTTLE_CAL) {
             log_i("Unlocked to throttle calibration mode.");
             changeMode(RevMode::CALIBRATE);
           } else {
@@ -516,8 +512,8 @@ void loop() {
   case RevMode::RIDE_NORMAL: {
     // switch headlight
     if (touch.available()) {
-      unsigned long currentTouchTime = millis();
-      if (currentTouchTime - lastTouchTime > debounceDelay) {
+      uint32_t currentTouchTime = millis();
+      if (currentTouchTime - lastTouchTime > TOUCH_DEBOUNCE_TIME_MS) {
         lastTouchTime = currentTouchTime;
         //      if(touch.data.x == 85 && touch.data.y == 360) //only the touch button
         if (touch.data.y >= 212)
@@ -526,8 +522,7 @@ void loop() {
       }
     }
 
-    if (lightF == HIGH &&
-        voltdropcomp == 1) { // compensation of the voltage drop when headlight is turned on
+    if (lightF && voltdropcomp) { // compensation of the voltage drop when headlight is turned on
       throttleRAW += thComp;
     }
 
@@ -538,7 +533,7 @@ void loop() {
       nunck = map(throttleRAW, thZero, thMin - 100, 127, 0); //-100 to avoid running out of range
     }
 
-    if (digitalRead(PIN_BRAKE_SW) == 1 && nunck > 127 && stopOnBrake == 1) {
+    if (digitalRead(PIN_BRAKE_SW) && nunck > 127 && stopOnBrake) {
       nunck = 127; // interrupts acceleration when braking
     }
 
@@ -546,8 +541,8 @@ void loop() {
                                       // causing acceleration on throttle disconnect.
 
     // Send command to VESC if a mode change hasn't JUST occurred.
-    long currentTimeMs = millis();
-    if (currentTimeMs - lastModeChangeTimeMs > antiStutterDelayMs) {
+    uint32_t currentTimeMs = millis();
+    if (currentTimeMs - lastModeChangeTimeMs > ANTI_STUTTER_DELAY_MS) {
       UART.nunchuck.valueY = nunck;
       UART.setNunchuckValues();
     } else if (currentTimeMs < lastModeChangeTimeMs) {
@@ -561,12 +556,17 @@ void loop() {
     log_e("Invalid mode somehow.");
   }
 
-  long timeSinceLastLoop = millis() - lastLoopTime;
-  if (timeSinceLastLoop < TARGET_LOOP_PERIOD) {
-    delay(TARGET_LOOP_PERIOD - timeSinceLastLoop);
+  // This is a simple loop rate limiter.
+  // It will delay the loop if it's running too fast.
+  uint32_t thisLoopTime = millis();
+  if (lastLoopTime > thisLoopTime) {
+    log_e("millis() overflowed or other timing bug.");
+  } else if (thisLoopTime - lastLoopTime < TARGET_LOOP_PERIOD) {
+    delay(TARGET_LOOP_PERIOD - (thisLoopTime - lastLoopTime));
   } else {
-    // TODO: Currently loop times are about 100-140ms. I'd like to speed that up a tad if it's easy enough.
-    // log_w("Loop period %ld exceeded target of %ld", timeSinceLastLoop, TARGET_LOOP_PERIOD);
+    // TODO: Currently loop times are about 100-140ms. I'd like to speed that up a tad if it's easy
+    // enough.
+    // log_w("Loop time exceeded target of %ld", TARGET_LOOP_PERIOD);
   }
   lastLoopTime = millis();
 }
