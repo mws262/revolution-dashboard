@@ -228,6 +228,18 @@ public:
 		 */
 	void setLocalProfile(bool store, bool forward_can, bool divide_by_controllers, float current_min_rel, float current_max_rel, float speed_max_reverse, float speed_max, float duty_min, float duty_max, float watt_min, float watt_max);
 
+	/**
+     * @brief      Set brake light brightness
+     * @param      brightness  - Value from 0 (off) to 100 (full brightness)
+     */
+    void setBrakeLightBrightness(uint8_t brightness);
+    
+    /**
+     * @brief      Set headlight state
+     * @param      on  - true to turn on, false to turn off
+     */
+    void setHeadlightState(bool on);
+
 private:
 	/** Variabel to hold the reference to the Serial object to use for UART */
 	HardwareSerial *serialPort = NULL;

@@ -20,6 +20,13 @@
 #define PIN_TOUCH_IRQ 16
 #define PIN_TOUCH_RST 21
 
+#define DRY_RUN_MODE // Will not send motor commands to the vesc. For testing.
+#define VESC_CONTROLS_LIGHTS // If the VESC has built-in FETs for controlling lights.
+#define WIFI_ENABLED
+// #define WIFI_CONSOLE_ENABLED
+
+const bool headlightOnByDefault = false;
+
 // user setup
 float thPercentage = 80; // limits max % of throttle for mode1, enter max. RPM in VESC Tool (Motor
                          // Settings - General - RPM)
@@ -31,8 +38,8 @@ acceleration in mode 1 is achieved by reducing the max throttle value.
 */
 
 // Rear light brightnesses normal and while braking.
-const uint8_t BACK_RUNNING_LIGHT_DUTY_CYCLE = 200;
-const uint8_t BACK_BRAKING_LIGHT_DUTY_CYCLE = 255;
+const uint8_t BACK_RUNNING_LIGHT_PERCENT = 20;
+const uint8_t BACK_BRAKING_LIGHT_PERCENT = 100;
 
 // This values are independent from VESC Tool, you have to set it too.
 const float WHEEL_DIA_MM = 240.0f; // tyre Size in mm, tune this to get correct velocity (also set the
