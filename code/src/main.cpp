@@ -46,7 +46,7 @@ enum class RevMode { LOCK, CALIBRATE, RIDE_NORMAL, RIDE_SPORT };
 
 RevMode currentMode = RevMode::LOCK;
 
-SimpleKalmanFilter thFilter(2, 2, 0.01);
+SimpleKalmanFilter thFilter(1, 2, 0.1);
 Preferences pref;
 HardwareSerial SerialVESC(2);
 VescUart vescUart;
@@ -76,6 +76,9 @@ int motT = 0;
 float maxNunck;
 
 bool lightF = false;
+bool throttleValuesSet =
+    false;  // Prevent the Rev from going into one of the drive modes when the
+            // throttle calibration values aren't set.
 
 String pin_entry = "";
 
@@ -118,49 +121,46 @@ int custom_log_printf(const char *format, ...) {
   // Print to Serial
   Serial.print(log_buf);
 
-  // Send to WebSocket
-  #ifdef WIFI_CONSOLE_ENABLED
+// Send to WebSocket
+#ifdef WIFI_CONSOLE_ENABLED
   debugServer.broadcast(String(log_buf));
-  #endif
+#endif
 
   return len;
 }
 
 void setup() {
   Serial.begin(115200);
-  // Initiate wifi for OTA updates. This is non-blocking. The main loop will
-  // handle other initializations once the network is connected.
-  #ifdef WIFI_ENABLED
+// Initiate wifi for OTA updates. This is non-blocking. The main loop will
+// handle other initializations once the network is connected.
+#ifdef WIFI_ENABLED
   log_d("Connecting to WiFi...");
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
-  #endif
+#endif
 
   // data storage
   log_d("Loading preferences...");
   pref.begin("thValues", false);  // "true" defines read-only access
-  thMax = pref.getUInt("thMax", 0);
-  thZero = pref.getUInt("thZero", 0);
-  thMin = pref.getUInt("thMin", 0);
+  thMax = pref.getUInt("thMax", UINT32_MAX);
+  thZero = pref.getUInt("thZero", UINT32_MAX);
+  thMin = pref.getUInt("thMin", UINT32_MAX);
   pref.end();
+
+  // If throttle values aren't set, keep the rev from going into a drive mode.
+  if (thMax == UINT32_MAX || thZero == UINT32_MAX || thMin == UINT32_MAX) {
+    log_w("Throttle values not found in preferences. Using defaults.");
+  } else {
+    throttleValuesSet = true;
+  }
 
   // serial VESC
   log_d("Setting up serial VESC...");
   SerialVESC.begin(115200, SERIAL_8N1, 43,
                    44);  // Lilygo Pin43=RX to VescTX, Lilygo Pin44=TX to VescRX
-  while (!SerialVESC) {}
+  while (!SerialVESC) {
+  }
   vescUart.setSerialPort(&SerialVESC);
-
-#ifdef VESC_CONTROLS_LIGHTS
-  vescUart.setBrakeLightBrightness(BACK_RUNNING_LIGHT_PERCENT);
-  vescUart.setHeadlightState(headlightOnByDefault);
-#else
-  pinMode(PIN_HEADLIGHT, OUTPUT);
-  ledcAttachPin(PIN_REARLIGHT, PWM_CHANNEL);
-  ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
-  ledcWrite(PWM_CHANNEL, BACK_RUNNING_LIGHT_PERCENT * 255 / 100);
-  digitalWrite(PIN_HEADLIGHT, headlightOnByDefault);
-#endif
 
   pinMode(PIN_BRAKE_SW, INPUT);
   pinMode(PIN_THROTTLE, INPUT);
@@ -184,6 +184,18 @@ void setup() {
   if (!waitForVescConnection(3000)) {
     log_e("Unable to communicate with VESC. Continuing anyway...");
   }
+
+#ifdef VESC_CONTROLS_LIGHTS
+  vescUart.setBrakeLightBrightness(BACK_RUNNING_LIGHT_PERCENT);
+  vescUart.setHeadlightState(headlightOnByDefault);
+#else
+  pinMode(PIN_HEADLIGHT, OUTPUT);
+  ledcAttachPin(PIN_REARLIGHT, PWM_CHANNEL);
+  ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
+  ledcWrite(PWM_CHANNEL, BACK_RUNNING_LIGHT_PERCENT * 255 / 100);
+  digitalWrite(PIN_HEADLIGHT, headlightOnByDefault);
+#endif
+
   changeMode(RevMode::LOCK);
 }
 
@@ -290,7 +302,7 @@ void drawScreenCockpit() {
 
   cockpitSprite.setTextDatum(4);
   cockpitSprite.drawString(String("S"), 86, 299, 2);
-  
+
   // light
   cockpitSprite.pushImage(65, 230, 40, 40, Light);
   if (lightF) {
@@ -347,7 +359,6 @@ char handleLockScreenTouch(uint16_t x, uint16_t y) {
 void changeMode(RevMode newMode) {
   switch (newMode) {
     case RevMode::CALIBRATE:
-
       break;
 
     case RevMode::LOCK:
@@ -356,13 +367,23 @@ void changeMode(RevMode newMode) {
       break;
 
     case RevMode::RIDE_NORMAL:
-      setVescProfileNormal();
-      maxNunck = thPercentage * 0.01f * 127 + 127;
+      if (throttleValuesSet) {
+        setVescProfileNormal();
+        maxNunck = thPercentage * 0.01f * 127 + 127;
+      } else {
+        log_w("Throttle values not set. Cannot enter ride mode.");
+        changeMode(RevMode::CALIBRATE);
+      }
       break;
 
     case RevMode::RIDE_SPORT:
-      setVescProfileSport();
-      maxNunck = 255;
+      if (throttleValuesSet) {
+        setVescProfileSport();
+        maxNunck = 255;
+      } else {
+        log_w("Throttle values not set. Cannot enter ride mode.");
+        changeMode(RevMode::CALIBRATE);
+      }
       break;
 
     default:
@@ -395,9 +416,9 @@ void handleWifi() {
       ArduinoOTA.setHostname("rev");
       ArduinoOTA.begin();
 
-      #ifdef WIFI_CONSOLE_ENABLED
+#ifdef WIFI_CONSOLE_ENABLED
       debugServer.begin();
-      #endif
+#endif
     }
   } else {
     // Attempt a quick reconnect if we've ever connected to WiFi before. Only
@@ -416,10 +437,10 @@ void handleWifi() {
 }
 
 void loop() {
-  #ifdef WIFI_ENABLED
+#ifdef WIFI_ENABLED
   handleWifi();
-  #endif
-  
+#endif
+
   // Updated filtered throttle reading. TODO: maybe move this into only the
   // drive modes.
   throttleRAW = (uint16_t)thFilter.updateEstimate(analogRead(PIN_THROTTLE));
@@ -615,7 +636,7 @@ void loop() {
 
 #ifndef DRY_RUN_MODE
         // Only send actual commands when not in dry run mode
-        UART.setNunchuckValues();
+        vescUart.setNunchuckValues();
 #else
         // Log what we would have sent
         log_v("DRY RUN: Would send nunchuck value: %d", nunck);
@@ -678,9 +699,9 @@ void setVescProfileSport() {
   float watt_max = 1500000.0;   // maximum watt value. DEFAULT =  1500000.0
 
 #ifndef DRY_RUN_MODE
-  UART.setLocalProfile(store, forward_can, divide_by_controllers,
-                       current_min_rel, current_max_rel, speed_max_reverse,
-                       speed_max, duty_min, duty_max, watt_min, watt_max);
+  vescUart.setLocalProfile(store, forward_can, divide_by_controllers,
+                           current_min_rel, current_max_rel, speed_max_reverse,
+                           speed_max, duty_min, duty_max, watt_min, watt_max);
 #else
   log_i("DRY RUN: Would set SPORT profile");
 #endif
@@ -694,19 +715,19 @@ void setVescProfileNormal() {
 bool waitForVescConnection(uint32_t timeout_ms = 3000) {
   uint32_t startTime = millis();
   log_i("Waiting for VESC to become ready...");
-  
+
   while (millis() - startTime < timeout_ms) {
     // Try to get VESC firmware version as a simple connectivity check
     if (vescUart.getFWversion()) {
-      log_i("VESC connected successfully! FW version: %d.%d", 
+      log_i("VESC connected successfully! FW version: %d.%d",
             vescUart.fw_version.major, vescUart.fw_version.minor);
       return true;
     }
-    
+
     // Brief delay between attempts
     delay(100);
   }
-  
+
   log_w("VESC connection timed out after %d ms", timeout_ms);
   return false;
 }

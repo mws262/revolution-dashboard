@@ -20,7 +20,7 @@
 #define PIN_TOUCH_IRQ 16
 #define PIN_TOUCH_RST 21
 
-#define DRY_RUN_MODE // Will not send motor commands to the vesc. For testing.
+// #define DRY_RUN_MODE // Will not send motor commands to the vesc. For testing.
 #define VESC_CONTROLS_LIGHTS // If the VESC has built-in FETs for controlling lights.
 #define WIFI_ENABLED
 // #define WIFI_CONSOLE_ENABLED
@@ -61,7 +61,7 @@ bool voltdropcomp = true;   /* The throttle reading is very sensitive on the giv
   value. */
 bool showThReading = false; // Turn this on to have a look at the input reading. This will be
                             // displayed above the text "Trip".
-const int16_t thComp = 180; // This should be the difference of the input reading of the throlle if
+const int16_t thComp = 0; // This should be the difference of the input reading of the throlle if
                             // the headlight is turned on or off.
 
 bool stopOnBrake = true; // 1 = the motors can not accelerate whie using the disc brake, 0 = motors
